@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": ".NET WPF Launch",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "build",
+      "program": "${workspaceFolder}/DesktopNotes/bin/Debug/net8.0-windows/DesktopNotes.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}/DesktopNotes",
+      "stopAtEntry": false,
+      "console": "internalConsole"
+    }
+  ]
+}
