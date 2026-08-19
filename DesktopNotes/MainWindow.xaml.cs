@@ -10,11 +10,14 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using DesktopNotes.Models;
 using DesktopNotes.Services;
 using Drawing = System.Drawing;
+using Drawing2D = System.Drawing.Drawing2D;
+using DrawingImaging = System.Drawing.Imaging;
 using Forms = System.Windows.Forms;
 using WpfPoint = System.Windows.Point;
 using WpfColor = System.Windows.Media.Color;
@@ -40,11 +43,15 @@ public partial class MainWindow : Window
 
     private WpfPoint _lastClickPosition;
     private Forms.NotifyIcon? _notifyIcon;
+    private Drawing.Icon? _appTrayIcon;
     private double _wallpaperLuminance = -1;
     private HwndSource? _source;
     private DispatcherTimer? _bottomTimer;
     private bool _isDrawingMode = false;
     private readonly StorageService _storageService = new StorageService();
+    // redo stacks: store recently undone strokes and removed notes for redo
+    private readonly System.Collections.Generic.Stack<System.Windows.Ink.Stroke> _redoStrokes = new();
+    private readonly System.Collections.Generic.Stack<(double X, double Y, string Text)> _redoNotes = new();
     private const byte DefaultCanvasAlpha = 0x03; // 1% alpha for overlay effect
     private byte _currentCanvasAlpha = DefaultCanvasAlpha;
 
@@ -53,6 +60,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         Loaded += MainWindow_Loaded;
         Closed += MainWindow_Closed;
+        var appIcon = CreateAppIcon();
+        Icon = appIcon.WindowIcon;
+        _appTrayIcon = appIcon.TrayIcon;
         SetCanvasBackgroundColor(WpfColor.FromArgb(_currentCanvasAlpha, 0xFF, 0xFF, 0xFF));
     }
 
@@ -64,6 +74,8 @@ public partial class MainWindow : Window
         UpdateWallpaperLuminance();
         SetupWallpaperChangeHook();
         LoadSavedNotes();
+        // capture new strokes to clear redo history when user draws
+        DrawCanvas.StrokeCollected += DrawCanvas_StrokeCollected;
 
         var helper = new WindowInteropHelper(this);
         var hWnd = helper.Handle;
@@ -184,7 +196,7 @@ public partial class MainWindow : Window
 
         _notifyIcon = new Forms.NotifyIcon
         {
-            Icon = Drawing.SystemIcons.Application,
+            Icon = _appTrayIcon ?? Drawing.SystemIcons.Application,
             Text = "DesktopNotes",
             Visible = true,
             BalloonTipTitle = "DesktopNotes",
@@ -355,9 +367,192 @@ public partial class MainWindow : Window
         }
     }
 
-    private void ResetDrawButton_Click(object sender, RoutedEventArgs e)
+    private void DrawCanvas_StrokeCollected(object? sender, InkCanvasStrokeCollectedEventArgs e)
     {
-        DrawCanvas.Strokes.Clear();
+        // New stroke invalidates redo history for strokes/notes
+        _redoStrokes.Clear();
+        _redoNotes.Clear();
+        SaveNotes();
+    }
+
+    private void UndoButton_Click(object sender, RoutedEventArgs e)
+    {
+        UndoLastAction();
+    }
+
+    private void RedoButton_Click(object sender, RoutedEventArgs e)
+    {
+        RedoLastAction();
+    }
+
+    private void Window_KeyDown(object sender, WpfKeyEventArgs e)
+    {
+        if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            UndoLastAction();
+            e.Handled = true;
+        }
+        // Ctrl+Y for redo (common Windows binding)
+        if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            RedoLastAction();
+            e.Handled = true;
+        }
+    }
+
+    private void UndoLastAction()
+    {
+        if (_isDrawingMode)
+        {
+            if (DrawCanvas.Strokes.Count > 0)
+            {
+                var last = DrawCanvas.Strokes[DrawCanvas.Strokes.Count - 1];
+                DrawCanvas.Strokes.Remove(last);
+                _redoStrokes.Push(last);
+                SaveNotes();
+            }
+            return;
+        }
+
+        if (TryUndoFocusedTextBox())
+        {
+            return;
+        }
+
+        if (TryRemoveLastTextBox())
+        {
+            return;
+        }
+    }
+
+    private bool TryUndoFocusedTextBox()
+    {
+        if (Keyboard.FocusedElement is WpfTextBox textBox)
+        {
+            if (textBox.CanUndo)
+            {
+                textBox.Undo();
+                SaveNotes();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryRemoveLastTextBox()
+    {
+        for (var index = NotesCanvas.Children.Count - 1; index >= 0; index--)
+        {
+            if (NotesCanvas.Children[index] is WpfTextBox)
+            {
+                var tb = (WpfTextBox)NotesCanvas.Children[index];
+                var x = Canvas.GetLeft(tb);
+                var y = Canvas.GetTop(tb);
+                var text = tb.Text;
+                NotesCanvas.Children.RemoveAt(index);
+                _redoNotes.Push((x, y, text));
+                SaveNotes();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void RedoLastAction()
+    {
+        if (_isDrawingMode)
+        {
+            if (_redoStrokes.Count > 0)
+            {
+                var stroke = _redoStrokes.Pop();
+                DrawCanvas.Strokes.Add(stroke);
+                SaveNotes();
+            }
+            return;
+        }
+
+        if (TryRedoFocusedTextBox())
+        {
+            return;
+        }
+
+        if (TryRestoreLastRemovedTextBox())
+        {
+            return;
+        }
+    }
+
+    private bool TryRedoFocusedTextBox()
+    {
+        if (Keyboard.FocusedElement is WpfTextBox textBox)
+        {
+            if (textBox.CanRedo)
+            {
+                textBox.Redo();
+                SaveNotes();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryRestoreLastRemovedTextBox()
+    {
+        if (_redoNotes.Count > 0)
+        {
+            var note = _redoNotes.Pop();
+            CreateTextBox(new WpfPoint(note.X, note.Y), note.Text);
+            SaveNotes();
+            return true;
+        }
+
+        return false;
+    }
+
+    private (ImageSource WindowIcon, Drawing.Icon TrayIcon) CreateAppIcon()
+    {
+        using var bitmap = new Drawing.Bitmap(256, 256);
+        using var graphics = Drawing.Graphics.FromImage(bitmap);
+        graphics.SmoothingMode = Drawing2D.SmoothingMode.AntiAlias;
+        graphics.Clear(Drawing.Color.FromArgb(255, 25, 35, 64));
+
+        using var backgroundBrush = new Drawing2D.LinearGradientBrush(
+            new Drawing.Rectangle(0, 0, 256, 256),
+            Drawing.Color.FromArgb(255, 72, 128, 255),
+            Drawing.Color.FromArgb(255, 21, 34, 58),
+            45f);
+        graphics.FillRectangle(backgroundBrush, 0, 0, 256, 256);
+
+        using var outerBrush = new Drawing.SolidBrush(Drawing.Color.FromArgb(240, 255, 255, 255));
+        graphics.FillEllipse(outerBrush, 40, 40, 176, 176);
+        using var innerBrush = new Drawing.SolidBrush(Drawing.Color.FromArgb(255, 53, 99, 255));
+        graphics.FillEllipse(innerBrush, 58, 58, 140, 140);
+
+        using var noteBrush = new Drawing.SolidBrush(Drawing.Color.FromArgb(255, 255, 255, 255));
+        graphics.FillRectangle(noteBrush, 88, 78, 80, 92);
+        using var accentPen = new Drawing.Pen(Drawing.Color.FromArgb(255, 53, 99, 255), 12f);
+        accentPen.StartCap = Drawing2D.LineCap.Round;
+        accentPen.EndCap = Drawing2D.LineCap.Round;
+        graphics.DrawLine(accentPen, 102, 110, 150, 110);
+        graphics.DrawLine(accentPen, 102, 133, 142, 133);
+        graphics.DrawLine(accentPen, 102, 156, 128, 156);
+
+        using var stream = new MemoryStream();
+        bitmap.Save(stream, DrawingImaging.ImageFormat.Png);
+        stream.Position = 0;
+
+        var windowIcon = new BitmapImage();
+        windowIcon.BeginInit();
+        windowIcon.CacheOption = BitmapCacheOption.OnLoad;
+        windowIcon.StreamSource = stream;
+        windowIcon.EndInit();
+        windowIcon.Freeze();
+
+        var trayIcon = Drawing.Icon.FromHandle(bitmap.GetHicon());
+        return (windowIcon, trayIcon);
     }
 
     private void CreateTextBox(WpfPoint position, string initialText = "")
@@ -392,6 +587,10 @@ public partial class MainWindow : Window
         Canvas.SetTop(textBox, Math.Max(24, position.Y));
 
         NotesCanvas.Children.Add(textBox);
+
+        // creating a new note invalidates redo history for removed notes/strokes
+        _redoNotes.Clear();
+        _redoStrokes.Clear();
 
         Dispatcher.BeginInvoke(new Action(() =>
         {
