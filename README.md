@@ -1,42 +1,48 @@
 # DesktopNotes
+
 ![CI](https://github.com/AdilAbdulRahim/DesktopNotes/actions/workflows/ci.yml/badge.svg)
 
-DesktopNotes is an open-source interactive desktop layer for Windows that provides draggable notes, checklists, and lightweight widgets to enhance desktop productivity beyond static wallpapers and shortcuts.
+**A lightweight note-taking and drawing layer for the Windows desktop.**
 
-**Key features**
-- Floating, resizable notes and checklists
-- Persistent storage and simple sync-friendly format
-- Lightweight, low-memory footprint WPF app targeting .NET 8
-- Extensible architecture for services and plugins
+I built DesktopNotes to make it easy to capture thoughts and sketch ideas right where I work. It runs as a transparent overlay on the desktop, so notes and ink stay close without opening a separate workspace.
 
-## Screenshots
-Add screenshots to `Resources/` and reference them here to showcase the UI.
+## What it does
 
-## Getting started
-Prerequisites: .NET 8 SDK
+- Create notes anywhere on the desktop, with quick-start bullet and numbered lists.
+- Draw freehand ink directly over the desktop.
+- Undo and redo edits, notes, and drawing strokes.
+- Save notes and drawings locally and restore them when the app starts.
+- Choose a subtle background color and automatically adapt text contrast to the wallpaper.
+- Access the app from the system tray; it can also start with Windows.
 
-Build from source:
+## What I learned
+
+Building this project gave me hands-on experience with:
+
+- Creating a desktop UI with **C#, WPF, and XAML** on **.NET 8**.
+- Connecting interactive controls, keyboard shortcuts, text editing, and ink input.
+- Working with Windows desktop behavior and native APIs to layer an app over the wallpaper.
+- Persisting application data locally with JSON and WPF's ink serialization.
+- Improving readability by sampling wallpaper colors and adjusting text contrast.
+
+## Build and run
+
+Requires Windows and the .NET 8 SDK.
 
 ```powershell
 dotnet build DesktopNotes.sln -c Release
 ```
 
-Run the app (from IDE or by running the built executable in `bin/Debug/net8.0-windows/`).
+Run the app from Visual Studio or launch the built executable from `DesktopNotes\bin\Debug\net8.0-windows\`.
 
-## Contributing
-We welcome contributions. See CONTRIBUTING.md for guidelines on issues, pull requests, and coding conventions.
+Notes and drawings are stored locally in `%LOCALAPPDATA%\DesktopNotes`.
 
-## License
-This project is released under the MIT License. See LICENSE for details.
+## Project details
 
-## Code of Conduct
-Please review CODE_OF_CONDUCT.md before contributing.
-
-## Roadmap
-See `docs/ROADMAP.md` for planned features and goals.
-
-## Security
-If you discover a security vulnerability, please see SECURITY.md for reporting instructions.
+- **Platform:** Windows
+- **Technologies:** C#, WPF, XAML, .NET 8
+- **License:** MIT
 
 ---
-Maintainers: AdilAbdulRahim and contributors
+
+Built by [Adil Abdul Rahim](https://github.com/AdilAbdulRahim) as a hands-on project in desktop application development.
