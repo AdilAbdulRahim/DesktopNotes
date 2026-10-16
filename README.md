@@ -4,7 +4,7 @@
 
 **A lightweight note-taking and drawing layer for the Windows desktop.**
 
-I built DesktopNotes to make it easy to capture thoughts and sketch ideas right where I work. It runs as a transparent overlay on the desktop, so notes and ink stay close without opening a separate workspace.
+I built DesktopNotes to make it easy to capture thoughts and sketch ideas right where I work. It runs as a transparent desktop overlay, and I welcome people to explore the project, share ideas, and contribute.
 
 ## What it does
 
@@ -12,7 +12,6 @@ I built DesktopNotes to make it easy to capture thoughts and sketch ideas right 
 - Draw freehand ink directly over the desktop.
 - Undo and redo edits, notes, and drawing strokes.
 - Save notes and drawings locally and restore them when the app starts.
-- Choose a subtle background color and automatically adapt text contrast to the wallpaper.
 - Access the app from the system tray; it can also start with Windows.
 
 ## What I learned
